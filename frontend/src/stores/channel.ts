@@ -394,6 +394,11 @@ export const useChannelStore = defineStore('channel', () => {
 
     if (editingChannelIndex !== null) {
       // 更新现有渠道
+      const primaryPatch = { ...channel }
+      if (options?.originalChannel?.protocolRoutes?.length &&
+          (targetTab !== 'responses' || channel.serviceType !== 'responses')) {
+        delete primaryPatch.responsesReasoningFold
+      }
       let accountWarnings: string[] | undefined
       if (options?.autoManaged && options.accountUid) {
         const original = options.originalChannel
@@ -463,23 +468,31 @@ export const useChannelStore = defineStore('channel', () => {
           )
         }
       } else if (isChat) {
-        await updateChannelByType('chat', editingChannelIndex, channel, options?.originalChannel?.channelUid)
+        await updateChannelByType('chat', editingChannelIndex, primaryPatch, options?.originalChannel?.channelUid)
       } else if (isVectors) {
-        await updateChannelByType('vectors', editingChannelIndex, channel, options?.originalChannel?.channelUid)
+        await updateChannelByType('vectors', editingChannelIndex, primaryPatch, options?.originalChannel?.channelUid)
       } else if (isImages) {
-        await updateChannelByType('images', editingChannelIndex, channel, options?.originalChannel?.channelUid)
+        await updateChannelByType('images', editingChannelIndex, primaryPatch, options?.originalChannel?.channelUid)
       } else if (isGemini) {
-        await updateChannelByType('gemini', editingChannelIndex, channel, options?.originalChannel?.channelUid)
+        await updateChannelByType('gemini', editingChannelIndex, primaryPatch, options?.originalChannel?.channelUid)
       } else if (isResponses) {
-        await updateChannelByType('responses', editingChannelIndex, channel, options?.originalChannel?.channelUid)
+        await updateChannelByType('responses', editingChannelIndex, primaryPatch, options?.originalChannel?.channelUid)
       } else {
-        await updateChannelByType('messages', editingChannelIndex, channel, options?.originalChannel?.channelUid)
+        await updateChannelByType('messages', editingChannelIndex, primaryPatch, options?.originalChannel?.channelUid)
       }
       const original = options?.originalChannel
       const originalRoutes = original?.protocolRoutes?.length ? original.protocolRoutes : original ? [{
         kind: targetTab, index: editingChannelIndex, channelUid: original.channelUid,
         name: original.name, serviceType: original.serviceType, supportedModels: original.supportedModels,
       }] : []
+      for (const route of originalRoutes) {
+        if (route.kind !== 'responses' || route.serviceType !== 'responses' || !route.channelUid) continue
+        if (!!route.responsesReasoningFold === !!channel.responsesReasoningFold) continue
+        await api.updateChannelV2(route.channelUid, {
+          kind: route.upstreamKind ?? route.kind,
+          responsesReasoningFold: !!channel.responsesReasoningFold,
+        })
+      }
       for (const update of buildProtocolModelLimitUpdates(originalRoutes, channel.protocolRoutes ?? [])) {
         await api.updateChannelV2(update.channelUid, { kind: update.kind, supportedModels: update.supportedModels })
       }

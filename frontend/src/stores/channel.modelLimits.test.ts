@@ -41,3 +41,20 @@ describe('渠道白名单保存', () => {
       { channelType: 'responses', originalChannel: original })).rejects.toThrow('save failed')
   })
 })
+
+it.each([false, true])('多协议渠道按 Responses 路由保存续接设置，原值=%s', async enabled => {
+  setActivePinia(createPinia())
+  mocks.updateChannelV2.mockReset().mockResolvedValue(undefined)
+  const store = useChannelStore()
+  const mixed = { ...original, serviceType: 'openai', channelUid: 'chat', responsesReasoningFold: false,
+    protocolRoutes: [
+      { kind: 'chat', index: 0, channelUid: 'chat', name: 'test', serviceType: 'openai' },
+      { kind: 'responses', index: 1, channelUid: 'response', name: 'test', serviceType: 'responses', responsesReasoningFold: enabled },
+    ],
+  } as Channel
+  const result = await store.saveChannel({ ...mixed, responsesReasoningFold: !enabled }, 0,
+    { channelType: 'chat', originalChannel: mixed })
+  expect(result.success).toBe(true)
+  expect(mocks.updateChannelV2.mock.calls.find(([uid]) => uid === 'chat')?.[1]).not.toHaveProperty('responsesReasoningFold')
+  expect(mocks.updateChannelV2).toHaveBeenCalledWith('response', { kind: 'responses', responsesReasoningFold: !enabled })
+})
